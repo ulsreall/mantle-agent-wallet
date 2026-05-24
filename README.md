@@ -11,7 +11,7 @@
 
 [![MantleAgent Demo](https://img.youtube.com/vi/I_wQ65R0bok/maxresdefault.jpg)](https://youtu.be/I_wQ65R0bok)
 
-**MantleAgent** is an autonomous AI agent wallet that executes DeFi strategies on Mantle Mainnet. It integrates **ERC-8004 identity** for verifiable on-chain reputation and implements **compound yield farming** to maximize returns.
+**MantleAgent** is an autonomous AI agent wallet that executes DeFi strategies on Mantle Mainnet. It integrates **ERC-8004 identity** for verifiable on-chain reputation and implements **4 autonomous strategies** to maximize returns.
 
 Built for **[The Turing Test Hackathon 2026](https://dorahacks.io/hackathon/mantleturingtesthackathon2026)** — Track 6: Agentic Wallets & Economy.
 
@@ -24,14 +24,15 @@ Built for **[The Turing Test Hackathon 2026](https://dorahacks.io/hackathon/mant
 │                    MantleAgent                          │
 ├─────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │   AI Agent   │  │  Swap Engine │  │  Compound    │  │
-│  │  (TypeScript)│──│  (Agni V3)   │──│  Strategy    │  │
+│  │   AI Agent   │  │  Swap Engine │  │  Strategies  │  │
+│  │  (TypeScript)│──│  (Agni V3)   │──│  DCA/Grid/   │  │
+│  │              │  │  (Merch Moe) │  │  Arb/SL-TP   │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
 ├─────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
 │  │  Agentic     │  │  ERC-8004    │  │  Dashboard   │  │
 │  │  Wallet      │  │  Identity    │  │  (React)     │  │
-│  │  (Solidity)  │  │  Registry    │  │              │  │
+│  │  (Solidity)  │  │  Registry    │  │  + API       │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
 ├─────────────────────────────────────────────────────────┤
 │                    Mantle Mainnet (Chain ID: 5000)      │
@@ -40,12 +41,23 @@ Built for **[The Turing Test Hackathon 2026](https://dorahacks.io/hackathon/mant
 
 ## ✨ Features
 
+### 🎯 4 Autonomous Strategies
+
+| Strategy | Risk | Description |
+|----------|------|-------------|
+| 📊 **DCA** | Low | Auto-buy fixed MNT at regular intervals |
+| 📐 **Grid Trading** | Medium | Buy/sell at predefined price levels |
+| 🔍 **Arbitrage** | Low | Scan Agni vs Merchant Moe for spreads |
+| 🛡️ **Stop Loss/TP** | Low | Auto-sell at price thresholds |
+
+### 🔧 Core Features
+
 - **🪪 ERC-8004 Identity** — On-chain agent identity with verifiable reputation
-- **🔀 Autonomous Swaps** — Execute swaps on Agni Finance (Uniswap V3 fork)
-- **📈 Compound Strategy** — Auto-reinvest profits (MNT → USDT → MNT)
-- **🎯 Smart Routing** — Best rate discovery across DEXes
+- **🔀 Autonomous Swaps** — Execute swaps on Agni Finance & Merchant Moe
+- **📈 Multi-DEX Routing** — Best rate discovery across DEXes
 - **🛡️ On-chain Wallet** — Smart contract wallet with owner controls
-- **📊 Live Dashboard** — Real-time P&L and strategy monitoring
+- **📊 Live Dashboard** — Real-time stats, strategy control, activity log
+- **🔌 REST API** — Backend endpoints for quotes, strategies, stats
 
 ## 📁 Project Structure
 
@@ -56,11 +68,20 @@ mantle-agent-wallet/
 │       ├── agent.ts        # CLI interface
 │       ├── swap.ts         # Swap executor (Agni V3)
 │       ├── compound.ts     # Compound yield strategy
-│       └── config.ts       # Network & contract config
+│       ├── config.ts       # Network & contract config
+│       └── strategies/     # 4 Autonomous strategies
+│           ├── dca.ts      # Dollar Cost Average
+│           ├── grid.ts     # Grid Trading
+│           ├── arbitrage.ts # Arbitrage Scanner
+│           └── stoploss.ts # Stop Loss / Take Profit
 ├── contracts/              # Solidity Smart Contracts
 │   └── src/
 │       └── AgenticWallet.sol  # Agent wallet contract
-├── frontend/               # React Dashboard
+├── frontend/               # React Dashboard + API
+│   ├── api/                # Vercel Serverless Functions
+│   │   ├── quote.ts        # Price quotes
+│   │   ├── strategy.ts     # Strategy recommendations
+│   │   └── stats.ts        # Wallet stats
 │   └── src/
 │       ├── pages/
 │       │   └── Dashboard.tsx
@@ -90,7 +111,8 @@ cd ../frontend && npm install
 ### 2. Configure Environment
 
 ```bash
-export DEPLOYER_PRIVATE_KEY="your_private_key_here"
+cp .env.example .env
+# Edit .env with your private key
 ```
 
 ### 3. Run Agent
@@ -114,6 +136,28 @@ npx tsx src/agent.ts swap 0x0000000000000000000000000000000000000000 0x201EBa5CC
 cd frontend
 npm run dev
 # Open http://localhost:5173
+```
+
+## 🔌 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/stats` | GET | Wallet balance, price, tx count |
+| `/api/strategy?balance=X` | GET | Strategy recommendations |
+| `/api/quote?amount=X` | GET | DEX price quotes |
+
+### Example Response
+
+```json
+// GET /api/stats
+{
+  "success": true,
+  "address": "0x3417...793B",
+  "balance": { "mnt": "2.7920", "usd": "1.83" },
+  "mntPrice": 0.6544,
+  "txCount": 34,
+  "erc8004": { "tokenId": 98, "network": "mantle" }
+}
 ```
 
 ## 🔧 Smart Contract
@@ -140,21 +184,23 @@ function withdraw(address to, uint256 amount) external;
 
 ## 📊 Live Test Results
 
-### Compound Strategy (Round-Trip Swap)
+### On-Chain Activity
 
 ```
-🏦 Starting: 3.5844 MNT
-🔀 Swap 1:  MNT → USDT (Agni, fee 500)
-🔀 Swap 2:  USDT → MNT (Agni, fee 500)
-🏁 Final:    3.6104 MNT
-💰 Profit:   +0.0260 MNT
-📊 ROI:      +0.72%
+✅ 34 transactions on Mantle Mainnet
+✅ ERC-8004 Identity registered (Token #98)
+✅ Smart contract deployed
+✅ Multiple swap strategies executed
 ```
 
-**TX Hashes:**
-- Wrap & Approve: `0xf84eec05...` / `0x58759561...`
-- Swap WMNT→USDT: `0x7fe9517b...`
-- ERC-8004 Register: `0xe60a7b1d...`
+### Strategy Configs (from API)
+
+```
+📊 DCA:           0.14 MNT/hour, max 20 buys
+📐 Grid Trading:  $0.62-0.69 range, 5 levels
+🔍 Arbitrage:     >0.3% spread trigger
+🛡️ Stop Loss:     -10% / +15% / 5% trailing
+```
 
 ## 🗺️ Contract Addresses (Mantle Mainnet)
 
@@ -163,10 +209,9 @@ function withdraw(address to, uint256 amount) external;
 | AgenticWallet | `0xb22c73495353fe732CAFD4dbFFD6500939BB9507` |
 | ERC-8004 Registry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Agni Router | `0x319b69888b0d11cec22caa5034e25fffbdc88421` |
-| Agni Factory | `0x25780dc8Fc3cfBD75F33bFDAB65e969b603b2035` |
+| Merchant Moe Router | `0x88a8984f2b8507bbc1c699594e3a4ecdefed4784` |
 | WMNT | `0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8` |
 | USDT | `0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE` |
-| USDC | `0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9` |
 
 ## 🎯 Hackathon Track
 
@@ -174,17 +219,20 @@ function withdraw(address to, uint256 amount) external;
 
 This project demonstrates:
 1. ✅ ERC-8004 agent identity registration
-2. ✅ Autonomous DeFi strategy execution
-3. ✅ On-chain P&L tracking
-4. ✅ Smart contract wallet with owner controls
-5. ✅ Real mainnet swaps with compound yields
+2. ✅ 4 autonomous DeFi strategies
+3. ✅ Multi-DEX routing (Agni V3 + Merchant Moe)
+4. ✅ On-chain P&L tracking
+5. ✅ Smart contract wallet with owner controls
+6. ✅ REST API for strategy recommendations
+7. ✅ Real mainnet swaps (34 transactions)
 
 ## 🛠️ Tech Stack
 
 - **Smart Contracts:** Solidity 0.8.26 + Foundry
 - **Agent:** TypeScript + ethers.js v6
 - **Frontend:** React 19 + Vite
-- **DEX:** Agni Finance (Uniswap V3 fork)
+- **Backend:** Vercel Serverless Functions
+- **DEX:** Agni Finance + Merchant Moe (Uniswap V3 forks)
 - **Identity:** ERC-8004 Trustless Agents
 - **Network:** Mantle Mainnet (Chain ID: 5000)
 
@@ -195,6 +243,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 ## 🔗 Links
 
 - [Live Dashboard](https://mantle-agent.vercel.app)
+- [Demo Video](https://youtu.be/I_wQ65R0bok)
 - [8004scan Profile](https://8004scan.io/agents/mantle/98)
 - [Mantlescan Contract](https://mantlescan.xyz/address/0xb22c73495353fe732CAFD4dbFFD6500939BB9507)
 - [GitHub Repository](https://github.com/ulsreall/mantle-agent-wallet)
