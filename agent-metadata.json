@@ -1,0 +1,36 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "MantleAgent",
+  "description": "Autonomous AI agent wallet on Mantle Network. Executes DeFi strategies including swaps, liquidity provision, and compound yield farming. Integrates ERC-8004 identity for verifiable on-chain reputation.",
+  "image": "https://raw.githubusercontent.com/ulsreall/mantle-agent-wallet/main/assets/logo.png",
+  "services": [
+    {
+      "name": "MCP",
+      "endpoint": "https://mantle-agent-wallet.vercel.app/api/mcp",
+      "version": "2026-05-24",
+      "mcpTools": [
+        "execute_swap",
+        "add_liquidity",
+        "compound_yield",
+        "check_balance",
+        "get_pnl"
+      ],
+      "mcpPrompts": [
+        "swap_tokens",
+        "optimize_yield",
+        "risk_assessment"
+      ],
+      "mcpResources": [
+        "mantle_mainnet",
+        "merchant_moe",
+        "agni_finance"
+      ]
+    }
+  ],
+  "registrations": [],
+  "supportedTrusts": [
+    "reputation"
+  ],
+  "active": true,
+  "x402support": false
+}
