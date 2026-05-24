@@ -242,7 +242,7 @@ export class StrategyEngine {
     try {
       const result = await this.walletManager.readContract(
         this.strategyExecutorAddress!,
-        StrategyExecutorABI,
+        StrategyExecutorABI as any,
         'getBestRoute',
         [tokenIn, tokenOut, amountIn]
       );
@@ -264,7 +264,7 @@ export class StrategyEngine {
     try {
       const result = await this.walletManager.callContract(
         this.strategyExecutorAddress!,
-        StrategyExecutorABI,
+        StrategyExecutorABI as any,
         'swap',
         [params.tokenIn, params.tokenOut, params.amountIn, params.minAmountOut, params.dex]
       );
@@ -288,7 +288,7 @@ export class StrategyEngine {
     try {
       const result = await this.walletManager.callContract(
         this.strategyExecutorAddress!,
-        StrategyExecutorABI,
+        StrategyExecutorABI as any,
         'addLiquidity',
         [params.tokenA, params.tokenB, params.amountA, params.amountB, params.dex]
       );
@@ -312,7 +312,7 @@ export class StrategyEngine {
     try {
       const result = await this.walletManager.callContract(
         this.strategyExecutorAddress!,
-        StrategyExecutorABI,
+        StrategyExecutorABI as any,
         'harvest',
         [farm, rewardToken]
       );
