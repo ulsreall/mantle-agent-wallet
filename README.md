@@ -5,6 +5,11 @@
 [![Mantle](https://img.shields.io/badge/Mantle-Mainnet-black)](https://mantlescan.xyz)
 [![ERC-8004](https://img.shields.io/badge/ERC--8004-Registered-blue)](https://8004scan.io)
 [![Deploy](https://img.shields.io/badge/Deploy-Vercel-black)](https://mantle-agent.vercel.app)
+[![YouTube](https://img.shields.io/badge/Demo-YouTube-red)](https://youtu.be/I_wQ65R0bok)
+
+## 🎬 Demo Video
+
+[![MantleAgent Demo](https://img.youtube.com/vi/I_wQ65R0bok/maxresdefault.jpg)](https://youtu.be/I_wQ65R0bok)
 
 **MantleAgent** is an autonomous AI agent wallet that executes DeFi strategies on Mantle Mainnet. It integrates **ERC-8004 identity** for verifiable on-chain reputation and implements **compound yield farming** to maximize returns.
 
