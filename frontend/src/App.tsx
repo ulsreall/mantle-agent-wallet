@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
-import { mantle, mantleSepolia } from 'wagmi/chains';
+import { mantle, mantleTestnet } from 'wagmi/chains';
 import { http, createConfig } from 'wagmi';
 
 import Dashboard from './pages/Dashboard';
@@ -16,10 +16,10 @@ import Layout from './components/Layout';
 
 // Wagmi config
 const config = createConfig({
-  chains: [mantle, mantleSepolia],
+  chains: [mantle, mantleTestnet],
   transports: {
     [mantle.id]: http('https://rpc.mantle.xyz'),
-    [mantleSepolia.id]: http('https://rpc.sepolia.mantle.xyz'),
+    [mantleTestnet.id]: http('https://rpc.sepolia.mantle.xyz'),
   },
 });
 

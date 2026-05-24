@@ -1,18 +1,5 @@
 // SPDX-License-Identifier: MIT
-import {
-  createPublicClient,
-  createWalletClient,
-  http,
-  parseAbi,
-  formatEther,
-  parseEther,
-  Address,
-  Hash,
-  PublicClient,
-  WalletClient,
-  Chain,
-} from 'viem';
-import { privateKeyToAccount, PrivateKeyAccount } from 'viem/accounts';
+import { ethers } from 'ethers';
 import { Logger } from 'pino';
 
 // ═══════════════════════════════════════════════════════════════
@@ -22,18 +9,18 @@ import { Logger } from 'pino';
 export interface WalletConfig {
   privateKey: string;
   rpcUrl: string;
-  chain: Chain;
+  chain: any;
   logger: Logger;
 }
 
 export interface TransactionRequest {
-  to: Address;
-  data: `0x${string}`;
+  to: string;
+  data: string;
   value?: bigint;
 }
 
 export interface TransactionResult {
-  hash: Hash;
+  hash: string;
   success: boolean;
   gasUsed?: bigint;
   error?: string;
@@ -45,9 +32,8 @@ export interface TransactionResult {
 
 export class WalletManager {
   private config: WalletConfig;
-  private account: PrivateKeyAccount;
-  private publicClient: PublicClient;
-  private walletClient: WalletClient;
+  private wallet: ethers.Wallet;
+  private provider: ethers.JsonRpcProvider;
   private logger: Logger;
 
   constructor(config: WalletConfig) {
@@ -59,23 +45,11 @@ export class WalletManager {
       throw new Error('Invalid private key. Must be 64 hex characters (without 0x prefix)');
     }
 
-    // Create account from private key
-    this.account = privateKeyToAccount(`0x${config.privateKey}`);
+    // Create provider and wallet
+    this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    this.wallet = new ethers.Wallet(`0x${config.privateKey}`, this.provider);
 
-    // Create public client for reading
-    this.publicClient = createPublicClient({
-      chain: config.chain,
-      transport: http(config.rpcUrl),
-    });
-
-    // Create wallet client for writing
-    this.walletClient = createWalletClient({
-      account: this.account,
-      chain: config.chain,
-      transport: http(config.rpcUrl),
-    });
-
-    this.logger.info(`Wallet manager initialized for ${this.account.address}`);
+    this.logger.info(`Wallet manager initialized for ${this.wallet.address}`);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -87,7 +61,7 @@ export class WalletManager {
 
     // Check if we can connect to the network
     try {
-      const blockNumber = await this.publicClient.getBlockNumber();
+      const blockNumber = await this.provider.getBlockNumber();
       this.logger.info(`Connected to network. Current block: ${blockNumber}`);
     } catch (error) {
       this.logger.error('Failed to connect to network:', error);
@@ -96,8 +70,8 @@ export class WalletManager {
 
     // Log wallet info
     const balance = await this.getBalance();
-    this.logger.info(`Wallet address: ${this.account.address}`);
-    this.logger.info(`Wallet balance: ${formatEther(balance)} MNT`);
+    this.logger.info(`Wallet address: ${this.wallet.address}`);
+    this.logger.info(`Wallet balance: ${ethers.formatEther(balance)} MNT`);
 
     return this;
   }
@@ -106,43 +80,34 @@ export class WalletManager {
   //                        GETTERS
   // ═══════════════════════════════════════════════════════════════
 
-  getAddress(): Address {
-    return this.account.address;
+  getAddress(): string {
+    return this.wallet.address;
   }
 
-  getChain(): Chain {
+  getChain(): any {
     return this.config.chain;
-  }
-
-  getPublicClient(): PublicClient {
-    return this.publicClient;
-  }
-
-  getWalletClient(): WalletClient {
-    return this.walletClient;
   }
 
   // ═══════════════════════════════════════════════════════════════
   //                        BALANCE
   // ═══════════════════════════════════════════════════════════════
 
-  async getBalance(address?: Address): Promise<bigint> {
-    const target = address || this.account.address;
-    return this.publicClient.getBalance({ address: target });
+  async getBalance(address?: string): Promise<bigint> {
+    const target = address || this.wallet.address;
+    return this.provider.getBalance(target);
   }
 
-  async getTokenBalance(tokenAddress: Address, address?: Address): Promise<bigint> {
-    const target = address || this.account.address;
+  async getTokenBalance(tokenAddress: string, address?: string): Promise<bigint> {
+    const target = address || this.wallet.address;
 
     try {
-      const balance = await this.publicClient.readContract({
-        address: tokenAddress,
-        abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
-        functionName: 'balanceOf',
-        args: [target],
-      });
+      const contract = new ethers.Contract(
+        tokenAddress,
+        ['function balanceOf(address) view returns (uint256)'],
+        this.provider
+      );
 
-      return balance;
+      return await contract.balanceOf(target);
     } catch (error) {
       this.logger.error(`Failed to get token balance for ${tokenAddress}:`, error);
       return 0n;
@@ -158,19 +123,19 @@ export class WalletManager {
 
     try {
       // Send transaction
-      const hash = await this.walletClient.sendTransaction({
+      const txResponse = await this.wallet.sendTransaction({
         to: tx.to,
         data: tx.data,
         value: tx.value || 0n,
       });
 
-      this.logger.info(`Transaction sent: ${hash}`);
+      this.logger.info(`Transaction sent: ${txResponse.hash}`);
 
       // Wait for receipt
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await txResponse.wait();
 
-      const success = receipt.status === 'success';
-      const gasUsed = receipt.gasUsed;
+      const success = receipt?.status === 1;
+      const gasUsed = receipt?.gasUsed;
 
       if (success) {
         this.logger.info(`Transaction successful. Gas used: ${gasUsed}`);
@@ -179,14 +144,14 @@ export class WalletManager {
       }
 
       return {
-        hash,
+        hash: txResponse.hash,
         success,
         gasUsed,
       };
     } catch (error: any) {
       this.logger.error('Transaction failed:', error);
       return {
-        hash: '0x' as Hash,
+        hash: '0x',
         success: false,
         error: error.message,
       };
@@ -194,68 +159,56 @@ export class WalletManager {
   }
 
   async callContract(
-    address: Address,
+    address: string,
     abi: any[],
     functionName: string,
     args: any[],
     value?: bigint
   ): Promise<TransactionResult> {
-    // Encode function call
-    const data = this.encodeFunctionData(abi, functionName, args);
+    this.logger.debug(`Calling ${functionName} on ${address}...`);
 
-    return this.sendTransaction({
-      to: address,
-      data,
-      value,
-    });
+    try {
+      const contract = new ethers.Contract(address, abi, this.wallet);
+      const tx = await contract[functionName](...args, { value: value || 0n });
+      this.logger.info(`Contract call sent: ${tx.hash}`);
+
+      const receipt = await tx.wait();
+      const success = receipt?.status === 1;
+
+      return {
+        hash: tx.hash,
+        success,
+        gasUsed: receipt?.gasUsed,
+      };
+    } catch (error: any) {
+      this.logger.error(`Contract call failed:`, error);
+      return {
+        hash: '0x',
+        success: false,
+        error: error.message,
+      };
+    }
   }
 
   async readContract(
-    address: Address,
+    address: string,
     abi: any[],
     functionName: string,
     args: any[]
   ): Promise<any> {
     try {
-      return await this.publicClient.readContract({
-        address,
-        abi,
-        functionName,
-        args,
-      });
+      const contract = new ethers.Contract(address, abi, this.provider);
+      return await contract[functionName](...args);
     } catch (error) {
       this.logger.error(`Failed to read contract ${functionName}:`, error);
       throw error;
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //                        HELPERS
-  // ═══════════════════════════════════════════════════════════════
-
-  private encodeFunctionData(
-    abi: any[],
-    functionName: string,
-    args: any[]
-  ): `0x${string}` {
-    // Find the function in the ABI
-    const func = abi.find(
-      (item: any) => item.type === 'function' && item.name === functionName
-    );
-
-    if (!func) {
-      throw new Error(`Function ${functionName} not found in ABI`);
-    }
-
-    // Encode the function call
-    // This is a simplified version - in production, use viem's encodeFunctionData
-    return '0x' as `0x${string}`;
-  }
-
   async estimateGas(tx: TransactionRequest): Promise<bigint> {
     try {
-      return await this.publicClient.estimateGas({
-        account: this.account.address,
+      return await this.provider.estimateGas({
+        from: this.wallet.address,
         to: tx.to,
         data: tx.data,
         value: tx.value || 0n,
@@ -267,6 +220,7 @@ export class WalletManager {
   }
 
   async getGasPrice(): Promise<bigint> {
-    return this.publicClient.getGasPrice();
+    const feeData = await this.provider.getFeeData();
+    return feeData.gasPrice || 0n;
   }
 }

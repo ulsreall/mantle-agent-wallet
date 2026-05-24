@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { createPublicClient, createWalletClient, http, parseAbi, formatEther, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { mantle, mantleSepolia } from 'viem/chains';
+import { mantle, mantleTestnet } from 'viem/chains';
 import { config } from 'dotenv';
 import pino from 'pino';
 import { WalletManager } from './wallet';
@@ -28,7 +28,7 @@ const logger = pino({
 // Determine chain based on environment
 // Default to mainnet for hackathon
 const useTestnet = process.env.USE_TESTNET === 'true';
-const chain = useTestnet ? mantleSepolia : mantle;
+const chain = useTestnet ? mantleTestnet : mantle;
 const rpcUrl = useTestnet
   ? process.env.MANTLE_SEPOLIA_RPC_URL || 'https://rpc.sepolia.mantle.xyz'
   : process.env.MANTLE_RPC_URL || 'https://rpc.mantle.xyz';

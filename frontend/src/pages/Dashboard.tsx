@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAccount, useBalance } from 'wagmi';
-import { mantle, mantleSepolia } from 'wagmi/chains';
+import { mantle, mantleTestnet } from 'wagmi/chains';
 import {
   Wallet,
   TrendingUp,
@@ -169,7 +169,7 @@ export default function Dashboard() {
   const { address, isConnected } = useAccount();
   const { data: balance } = useBalance({
     address,
-    chainId: mantleSepolia.id, // Use testnet for development
+    chainId: mantleTestnet.id, // Use testnet for development
   });
 
   // Mock data for demonstration
