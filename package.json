@@ -1,0 +1,33 @@
+{
+  "name": "mantle-agent-wallet",
+  "version": "0.1.0",
+  "description": "Agentic Wallet Economy on Mantle Network - Turing Test Hackathon 2026",
+  "private": true,
+  "workspaces": [
+    "agent",
+    "frontend"
+  ],
+  "scripts": {
+    "agent:install": "cd agent && npm install",
+    "agent:build": "cd agent && npm run build",
+    "agent:start": "cd agent && npm run start",
+    "agent:dev": "cd agent && npm run dev",
+    "frontend:install": "cd frontend && npm install",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "contracts:build": "cd contracts && forge build",
+    "contracts:test": "cd contracts && forge test",
+    "contracts:deploy": "cd contracts && forge script script/Deploy.s.sol --rpc-url mantle_sepolia --broadcast",
+    "install:all": "npm run agent:install && npm run frontend:install",
+    "build:all": "npm run agent:build && npm run frontend:build",
+    "dev": "concurrently \"npm run agent:dev\" \"npm run frontend:dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "author": "ulsreall"
+}
