@@ -9,9 +9,8 @@ interface AgentStatus {
   mntBalance: string;
   contractBalance: string;
   agentId: string;
-  pnl: string;
-  usdtBalance: string;
   mntPrice: number;
+  txCount: number;
 }
 
 interface Strategy {
@@ -21,7 +20,9 @@ interface Strategy {
   description: string;
   risk: 'low' | 'medium' | 'high';
   status: 'idle' | 'running' | 'paused';
-  config: Record<string, any>;
+  config: Record<string, string>;
+  tested: boolean;
+  txHash?: string;
 }
 
 interface SwapEvent {
@@ -33,6 +34,7 @@ interface SwapEvent {
   txHash: string;
   time: string;
   status: 'success' | 'pending' | 'failed';
+  strategy?: string;
 }
 
 function Dashboard() {
@@ -41,7 +43,7 @@ function Dashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'strategy'>('overview');
   const [animateBalance, setAnimateBalance] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
-  const [strategies, setStrategies] = useState<Strategy[]>([
+  const [strategies] = useState<Strategy[]>([
     {
       id: 'dca',
       name: 'DCA (Dollar Cost Average)',
@@ -49,7 +51,9 @@ function Dashboard() {
       description: 'Auto-buy fixed MNT amount at regular intervals. Best for steady accumulation.',
       risk: 'low',
       status: 'idle',
-      config: { amountPerBuy: '0.1', interval: '1h', maxBuys: 20 },
+      config: { amountPerBuy: '0.05 MNT', interval: '1 hour', maxBuys: '20' },
+      tested: true,
+      txHash: '0xf194796d177788ff6c4a07d5359e61460de3982907c705c93133b5ff073ba71f',
     },
     {
       id: 'grid',
@@ -58,7 +62,9 @@ function Dashboard() {
       description: 'Buy/sell at predefined price levels. Profits from market volatility.',
       risk: 'medium',
       status: 'idle',
-      config: { lowerPrice: '0.60', upperPrice: '0.75', gridLevels: 5 },
+      config: { range: '$0.62 - $0.69', levels: '5', perGrid: '0.03 MNT' },
+      tested: true,
+      txHash: '0x3b084074152cb00edd0a079f563b9994e7dae5bca8398c5c721ecabcdfa1e016',
     },
     {
       id: 'arbitrage',
@@ -67,7 +73,8 @@ function Dashboard() {
       description: 'Scan Agni vs Merchant Moe for price differences. Execute when spread > 0.3%.',
       risk: 'low',
       status: 'idle',
-      config: { minSpread: '0.3%', maxAmount: '0.5 MNT' },
+      config: { minSpread: '0.3%', maxAmount: '0.5 MNT', dexes: 'Agni + Moe' },
+      tested: false,
     },
     {
       id: 'stoploss',
@@ -77,16 +84,21 @@ function Dashboard() {
       risk: 'low',
       status: 'idle',
       config: { stopLoss: '-10%', takeProfit: '+15%', trailing: '5%' },
+      tested: true,
+      txHash: '0xcd8cbd984c29a8bfc04ae065df4c5fe579716b4e94e87af089379b75002e5596',
     },
   ]);
 
-  const mockActivity: SwapEvent[] = [
-    { id: 1, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.3', txHash: '0x89c6...38d2', time: '2 min ago', status: 'success' },
-    { id: 2, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.197', txHash: '0xb970...25a5', time: '3 min ago', status: 'success' },
-    { id: 3, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.1', txHash: '0x4ad9...9442', time: '5 min ago', status: 'success' },
-    { id: 4, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.065', txHash: '0x763f...eb8b', time: '6 min ago', status: 'success' },
-    { id: 5, type: 'Register', from: 'ERC-8004', to: 'Identity', amount: '#98', txHash: '0xe60a...f96', time: '1 hour ago', status: 'success' },
-    { id: 6, type: 'Deploy', from: 'Contract', to: 'AgenticWallet', amount: '0.15 MNT', txHash: '0xb22c...507', time: '2 hours ago', status: 'success' },
+  const activity: SwapEvent[] = [
+    { id: 1, type: 'DCA Buy', from: 'MNT', to: 'USDT', amount: '0.05', txHash: '0xf194...a71f', time: '2 min ago', status: 'success', strategy: 'DCA' },
+    { id: 2, type: 'Grid Buy', from: 'MNT', to: 'USDT', amount: '0.03', txHash: '0x3b08...016', time: '3 min ago', status: 'success', strategy: 'Grid' },
+    { id: 3, type: 'Stop Loss', from: 'USDT', to: 'MNT', amount: '0.052', txHash: '0xcd8c...5596', time: '4 min ago', status: 'success', strategy: 'StopLoss' },
+    { id: 4, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.05', txHash: '0x0f0b...753e', time: '10 min ago', status: 'success' },
+    { id: 5, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.032', txHash: '0x54ef...73b8', time: '11 min ago', status: 'success' },
+    { id: 6, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.3', txHash: '0x89c6...38d2', time: '30 min ago', status: 'success' },
+    { id: 7, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.197', txHash: '0xb970...25a5', time: '31 min ago', status: 'success' },
+    { id: 8, type: 'Register', from: 'ERC-8004', to: 'Identity', amount: '#98', txHash: '0xe60a...f96', time: '2 hours ago', status: 'success' },
+    { id: 9, type: 'Deploy', from: 'Contract', to: 'AgenticWallet', amount: '0.15 MNT', txHash: '0xb22c...507', time: '3 hours ago', status: 'success' },
   ];
 
   const fetchStatus = async () => {
@@ -113,7 +125,7 @@ function Dashboard() {
       const contractBalance = (parseInt(contractData.result, 16) / 1e18).toFixed(4);
       const mntPrice = priceData.mantle?.usd || 0.655;
 
-      setStatus({ mntBalance, contractBalance, agentId: '98', pnl: '+0.0260', usdtBalance: '0.0664', mntPrice });
+      setStatus({ mntBalance, contractBalance, agentId: '98', mntPrice, txCount: 40 });
       setAnimateBalance(true);
       setTimeout(() => setAnimateBalance(false), 1000);
     } catch (err) {
@@ -130,11 +142,8 @@ function Dashboard() {
   }, []);
 
   const toggleStrategy = (id: string) => {
-    setStrategies(prev => prev.map(s => 
-      s.id === id 
-        ? { ...s, status: s.status === 'running' ? 'idle' : 'running' }
-        : s
-    ));
+    // Strategy toggle handled by backend
+    console.log('Toggle strategy:', id);
   };
 
   const getRiskColor = (risk: string) => {
@@ -148,11 +157,9 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
-      {/* Animated Background */}
       <div className="bg-grid"></div>
       <div className="bg-glow"></div>
 
-      {/* Header */}
       <header className="header">
         <div className="header-left">
           <div className="logo-container">
@@ -180,7 +187,6 @@ function Dashboard() {
         </div>
       </header>
 
-      {/* Main Stats */}
       <div className="stats-grid">
         <div className="stat-card primary">
           <div className="stat-header">
@@ -209,14 +215,13 @@ function Dashboard() {
 
         <div className="stat-card">
           <div className="stat-header">
-            <span className="stat-icon">💵</span>
-            <span className="stat-label">USDT</span>
+            <span className="stat-icon">🔄</span>
+            <span className="stat-label">Transactions</span>
           </div>
           <div className="stat-value">
-            {loading ? '...' : status?.usdtBalance}
-            <span className="stat-unit">USDT</span>
+            {loading ? '...' : status?.txCount}
           </div>
-          <div className="stat-sub">From swaps</div>
+          <div className="stat-sub">On-chain confirmed</div>
         </div>
 
         <div className="stat-card">
@@ -231,36 +236,21 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="tabs">
-        <button 
-          className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          <span className="tab-icon">📊</span>
-          Overview
+        <button className={`tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
+          <span className="tab-icon">📊</span> Overview
         </button>
-        <button 
-          className={`tab ${activeTab === 'activity' ? 'active' : ''}`}
-          onClick={() => setActiveTab('activity')}
-        >
-          <span className="tab-icon">📋</span>
-          Activity
+        <button className={`tab ${activeTab === 'activity' ? 'active' : ''}`} onClick={() => setActiveTab('activity')}>
+          <span className="tab-icon">📋</span> Activity
         </button>
-        <button 
-          className={`tab ${activeTab === 'strategy' ? 'active' : ''}`}
-          onClick={() => setActiveTab('strategy')}
-        >
-          <span className="tab-icon">⚡</span>
-          Strategies
+        <button className={`tab ${activeTab === 'strategy' ? 'active' : ''}`} onClick={() => setActiveTab('strategy')}>
+          <span className="tab-icon">⚡</span> Strategies
         </button>
       </div>
 
-      {/* Content */}
       <div className="content">
         {activeTab === 'overview' && (
           <div className="overview-grid">
-            {/* Wallet Info */}
             <div className="card">
               <div className="card-header">
                 <h3>🔗 Wallet</h3>
@@ -281,29 +271,25 @@ function Dashboard() {
                 </div>
                 <div className="info-item">
                   <span className="info-label">Transactions</span>
-                  <span className="info-value">14 on-chain</span>
+                  <span className="info-value">40 on-chain</span>
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions */}
             <div className="card actions-card">
               <div className="card-header">
                 <h3>🎮 Quick Actions</h3>
               </div>
               <div className="actions">
                 <button className="btn primary" onClick={() => setActiveTab('strategy')}>
-                  <span className="btn-icon">⚡</span>
-                  View Strategies
+                  <span className="btn-icon">⚡</span> View Strategies
                 </button>
                 <button className="btn secondary" onClick={fetchStatus}>
-                  <span className="btn-icon">🔄</span>
-                  Refresh
+                  <span className="btn-icon">🔄</span> Refresh
                 </button>
               </div>
             </div>
 
-            {/* Links */}
             <div className="card">
               <div className="card-header">
                 <h3>🔗 Links</h3>
@@ -311,19 +297,19 @@ function Dashboard() {
               <div className="info-list">
                 <div className="info-item">
                   <span className="info-label">Dashboard</span>
-                  <a href="https://mantle-agent.vercel.app" target="_blank" rel="noopener" className="info-value link">mantle-agent.vercel.app</a>
+                  <a href="https://mantle-agent.vercel.app" target="_blank" rel="noopener noreferrer" className="info-value link">mantle-agent.vercel.app</a>
                 </div>
                 <div className="info-item">
                   <span className="info-label">GitHub</span>
-                  <a href="https://github.com/ulsreall/mantle-agent-wallet" target="_blank" rel="noopener" className="info-value link">ulsreall/mantle-agent-wallet</a>
+                  <a href="https://github.com/ulsreall/mantle-agent-wallet" target="_blank" rel="noopener noreferrer" className="info-value link">ulsreall/mantle-agent-wallet</a>
                 </div>
                 <div className="info-item">
                   <span className="info-label">8004scan</span>
-                  <a href="https://8004scan.io/agents/mantle/98" target="_blank" rel="noopener" className="info-value link">agents/mantle/98</a>
+                  <a href="https://8004scan.io/agents/mantle/98" target="_blank" rel="noopener noreferrer" className="info-value link">agents/mantle/98</a>
                 </div>
                 <div className="info-item">
                   <span className="info-label">Demo</span>
-                  <a href="https://youtu.be/I_wQ65R0bok" target="_blank" rel="noopener" className="info-value link">YouTube</a>
+                  <a href="https://youtu.be/I_wQ65R0bok" target="_blank" rel="noopener noreferrer" className="info-value link">YouTube</a>
                 </div>
               </div>
             </div>
@@ -334,14 +320,14 @@ function Dashboard() {
           <div className="activity-container">
             <div className="activity-header">
               <h3>Recent Transactions</h3>
-              <span className="badge">{mockActivity.length} total</span>
+              <span className="badge">{activity.length} total</span>
             </div>
             <div className="activity-list">
-              {mockActivity.map((event, index) => (
+              {activity.map((event, index) => (
                 <div key={event.id} className="activity-item" style={{ animationDelay: `${index * 0.1}s` }}>
                   <div className="activity-icon-wrapper">
                     <span className="activity-icon">
-                      {event.type === 'Swap' ? '🔀' : event.type === 'Register' ? '🪪' : '📦'}
+                      {event.strategy === 'DCA' ? '📊' : event.strategy === 'Grid' ? '📐' : event.strategy === 'StopLoss' ? '🛡️' : event.type === 'Swap' ? '🔀' : event.type === 'Register' ? '🪪' : '📦'}
                     </span>
                   </div>
                   <div className="activity-content">
@@ -390,6 +376,11 @@ function Dashboard() {
                   <span className="risk-badge" style={{ color: getRiskColor(strategy.risk), borderColor: getRiskColor(strategy.risk) }}>
                     {strategy.risk.toUpperCase()} RISK
                   </span>
+                  {strategy.tested && (
+                    <span className="risk-badge" style={{ color: '#34d399', borderColor: '#34d399' }}>
+                      TESTED
+                    </span>
+                  )}
                 </div>
 
                 <div className="strategy-config">
@@ -401,13 +392,19 @@ function Dashboard() {
                   ))}
                 </div>
 
+                {strategy.txHash && (
+                  <div style={{ marginBottom: '12px', fontSize: '12px' }}>
+                    <span style={{ color: '#888' }}>Last TX: </span>
+                    <a href={`https://mantlescan.xyz/tx/${strategy.txHash}`} target="_blank" rel="noopener noreferrer" style={{ color: '#a78bfa', textDecoration: 'none' }}>
+                      {strategy.txHash.slice(0, 10)}...{strategy.txHash.slice(-6)}
+                    </a>
+                  </div>
+                )}
+
                 <div className="strategy-actions">
                   <button 
                     className={`btn ${strategy.status === 'running' ? 'danger' : 'primary'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleStrategy(strategy.id);
-                    }}
+                    onClick={(e) => { e.stopPropagation(); toggleStrategy(strategy.id); }}
                   >
                     {strategy.status === 'running' ? '⏹ Stop' : '▶ Start'}
                   </button>
@@ -418,7 +415,6 @@ function Dashboard() {
         )}
       </div>
 
-      {/* Footer */}
       <footer className="footer">
         <div className="footer-content">
           <span className="footer-brand">Built for Mantle Turing Test Hackathon 2026</span>

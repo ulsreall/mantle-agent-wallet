@@ -187,11 +187,23 @@ function withdraw(address to, uint256 amount) external;
 ### On-Chain Activity
 
 ```
-✅ 34 transactions on Mantle Mainnet
+✅ 40 transactions on Mantle Mainnet
 ✅ ERC-8004 Identity registered (Token #98)
 ✅ Smart contract deployed
-✅ Multiple swap strategies executed
+✅ DCA strategy tested (real swap)
+✅ Grid Trading tested (real swap)
+✅ Stop Loss tested (real swap)
+✅ Arbitrage scanner ready
 ```
+
+### Strategy Test Results (Real On-Chain)
+
+| Strategy | Status | TX Hash |
+|----------|--------|---------|
+| DCA Buy | ✅ Confirmed | `0xf194796d...ba71f` |
+| Grid Buy | ✅ Confirmed | `0x3b084074...e016` |
+| Stop Loss | ✅ Confirmed | `0xcd8cbd98...e5596` |
+| Arbitrage | 🔍 Ready | Scanning... |
 
 ### Strategy Configs (from API)
 
