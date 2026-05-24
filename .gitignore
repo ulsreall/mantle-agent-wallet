@@ -66,3 +66,4 @@ contracts/broadcast/
 **/.env.*
 **/env.local
 **/env.production
+*mantle-hackathon*

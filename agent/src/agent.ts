@@ -1,213 +1,228 @@
-// SPDX-License-Identifier: MIT
-import { createPublicClient, createWalletClient, http, parseAbi, formatEther, parseEther } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { mantle, mantleTestnet } from 'viem/chains';
-import { config } from 'dotenv';
-import pino from 'pino';
-import { WalletManager } from './wallet';
-import { StrategyEngine } from './strategies/engine';
-import { MCPServer } from './mcp/server';
-
-// Load environment variables
-config();
+#!/usr/bin/env node
+import { ethers } from 'ethers';
+import { SwapExecutor, SwapResult } from './swap';
+import { ADDRESSES, getProvider } from './config';
 
 // ═══════════════════════════════════════════════════════════════
-//                        CONFIGURATION
+//                    MANTLE AGENT
 // ═══════════════════════════════════════════════════════════════
 
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-    },
-  },
-});
+class MantleAgent {
+  private swapExecutor: SwapExecutor;
+  private provider: ethers.JsonRpcProvider;
+  private startingBalance: bigint = 0n;
 
-// Determine chain based on environment
-// Default to mainnet for hackathon
-const useTestnet = process.env.USE_TESTNET === 'true';
-const chain = useTestnet ? mantleTestnet : mantle;
-const rpcUrl = useTestnet
-  ? process.env.MANTLE_SEPOLIA_RPC_URL || 'https://rpc.sepolia.mantle.xyz'
-  : process.env.MANTLE_RPC_URL || 'https://rpc.mantle.xyz';
-
-// ═══════════════════════════════════════════════════════════════
-//                        CONTRACT ABIS
-// ═══════════════════════════════════════════════════════════════
-
-const AgenticWalletABI = parseAbi([
-  'function execute(address target, bytes data, uint256 value) returns (bool success, bytes result)',
-  'function batchExecute(address[] targets, bytes[] datas, uint256[] values) returns (bool[] successes, bytes[] results)',
-  'function setStrategy(bytes32 strategyId)',
-  'function agentId() view returns (uint256)',
-  'function owner() view returns (address)',
-  'function activeStrategy() view returns (bytes32)',
-  'function getBalance() view returns (uint256)',
-  'function withdraw(address to, uint256 amount)',
-  'function registerStrategy(bytes32 strategyId, address executor)',
-  'event ActionExecuted(address indexed target, bytes data, uint256 value, bool success, bytes result)',
-  'event StrategyChanged(bytes32 oldStrategy, bytes32 newStrategy)',
-  'event Deposited(address indexed from, uint256 amount)',
-  'event Withdrawn(address indexed to, uint256 amount)',
-]);
-
-const StrategyExecutorABI = parseAbi([
-  'function swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, uint8 dex) returns (uint256 amountOut)',
-  'function addLiquidity(address tokenA, address tokenB, uint256 amountA, uint256 amountB, uint8 dex) returns (uint256 liquidity)',
-  'function harvest(address farm, address rewardToken) returns (uint256 amount)',
-  'function getBestRoute(address tokenIn, address tokenOut, uint256 amountIn) view returns (uint8 bestDex, uint256 bestAmount)',
-  'function setDEXRouter(uint8 dex, address router)',
-  'function setDEXFactory(uint8 dex, address factory)',
-]);
-
-const ERC8004ABI = parseAbi([
-  'function register(string agentURI) returns (uint256 tokenId)',
-  'function register(string agentURI, string[] metadata) returns (uint256 tokenId)',
-  'function getMetadata(uint256 tokenId, string key) view returns (string value)',
-  'function setMetadata(uint256 tokenId, string key, string value)',
-  'function getAgentWallet(uint256 tokenId) view returns (address wallet)',
-  'function tokenURI(uint256 tokenId) view returns (string uri)',
-]);
-
-// ═══════════════════════════════════════════════════════════════
-//                        MAIN AGENT
-// ═══════════════════════════════════════════════════════════════
-
-class MantleAgentWallet {
-  private walletManager: WalletManager;
-  private strategyEngine: StrategyEngine;
-  private mcpServer: MCPServer;
-  private isRunning: boolean = false;
-
-  constructor() {
-    // Initialize wallet manager
-    this.walletManager = new WalletManager({
-      privateKey: process.env.PRIVATE_KEY || '',
-      rpcUrl,
-      chain,
-      logger,
-    });
-
-    // Initialize strategy engine
-    this.strategyEngine = new StrategyEngine({
-      walletManager: this.walletManager,
-      logger,
-      config: {
-        defaultStrategy: process.env.DEFAULT_STRATEGY || 'swap',
-        maxTradeSize: parseFloat(process.env.MAX_TRADE_SIZE || '1.0'),
-        slippageTolerance: parseFloat(process.env.SLIPPAGE_TOLERANCE || '0.5'),
-      },
-    });
-
-    // Initialize MCP server
-    this.mcpServer = new MCPServer({
-      port: parseInt(process.env.MCP_PORT || '3000'),
-      walletManager: this.walletManager,
-      strategyEngine: this.strategyEngine,
-      logger,
-    });
+  constructor(privateKey: string) {
+    this.provider = getProvider();
+    this.swapExecutor = new SwapExecutor(privateKey);
   }
 
-  async start() {
-    logger.info('Starting Mantle Agent Wallet...');
-    logger.info(`Network: ${chain.name} (Chain ID: ${chain.id})`);
-    logger.info(`RPC: ${rpcUrl}`);
+  async initialize(): Promise<void> {
+    console.log('🤖 MantleAgent initializing...');
+    console.log(`📍 Wallet: ${this.swapExecutor.getAddress()}`);
+    
+    const balance = await this.provider.getBalance(this.swapExecutor.getAddress());
+    this.startingBalance = balance;
+    console.log(`💰 Balance: ${ethers.formatEther(balance)} MNT`);
+    
+    // Check WMNT balance
+    const wmntBalance = await this.swapExecutor.getBalance(ADDRESSES.WMNT);
+    console.log(`💰 WMNT: ${wmntBalance}`);
+    
+    console.log('✅ Agent ready!\n');
+  }
 
-    try {
-      // Initialize wallet
-      await this.walletManager.initialize();
-      logger.info(`Wallet address: ${this.walletManager.getAddress()}`);
+  // ─────────────────────────────────────────────────────────────
+  //                    STRATEGY: SWAP & COMPOUND
+  // ─────────────────────────────────────────────────────────────
 
-      // Check balance
-      const balance = await this.walletManager.getBalance();
-      logger.info(`Wallet balance: ${formatEther(balance)} MNT`);
+  async executeSwapStrategy(
+    tokenIn: string,
+    tokenOut: string,
+    amountMNT: number
+  ): Promise<SwapResult> {
+    const amount = ethers.parseEther(amountMNT.toString());
+    
+    console.log(`📊 Executing swap: ${amountMNT} MNT → ${tokenOut}`);
+    
+    if (tokenIn === ethers.ZeroAddress) {
+      // Native MNT swap
+      return this.swapExecutor.swapNativeMNT(tokenOut, amount, 'merchantMoe');
+    }
+    
+    return this.swapExecutor.smartSwap(tokenIn, tokenOut, amount);
+  }
 
-      // Start strategy engine
-      await this.strategyEngine.start();
-      logger.info('Strategy engine started');
+  // ─────────────────────────────────────────────────────────────
+  //                    COMPOUND STRATEGY
+  // ─────────────────────────────────────────────────────────────
 
-      // Start MCP server
-      if (process.env.MCP_ENABLED === 'true') {
-        await this.mcpServer.start();
-        logger.info(`MCP server started on port ${process.env.MCP_PORT || 3000}`);
+  async executeCompoundStrategy(
+    initialAmountMNT: number,
+    iterations: number = 3
+  ): Promise<void> {
+    console.log(`🔄 Starting compound strategy with ${initialAmountMNT} MNT`);
+    console.log(`📈 Iterations: ${iterations}\n`);
+
+    let currentAmount = ethers.parseEther(initialAmountMNT.toString());
+
+    for (let i = 0; i < iterations; i++) {
+      console.log(`\n--- Iteration ${i + 1}/${iterations} ---`);
+      
+      // Step 1: Swap MNT → USDe (stablecoin)
+      console.log('1️⃣ Swapping MNT → USDe...');
+      const swapResult = await this.swapExecutor.swapNativeMNT(
+        ADDRESSES.USDe,
+        currentAmount,
+        'merchantMoe'
+      );
+
+      if (!swapResult.success) {
+        console.error(`❌ Swap failed: ${swapResult.error}`);
+        break;
       }
 
-      this.isRunning = true;
-      logger.info('Mantle Agent Wallet started successfully!');
+      console.log(`✅ Swap successful! TX: ${swapResult.txHash}`);
 
-      // Start main loop
-      await this.mainLoop();
-    } catch (error) {
-      logger.error('Failed to start agent:', error);
-      process.exit(1);
-    }
-  }
+      // Step 2: Check new balance
+      const usdeBalance = await this.swapExecutor.getBalance(ADDRESSES.USDe);
+      console.log(`💰 USDe balance: ${usdeBalance}`);
 
-  private async mainLoop() {
-    logger.info('Entering main loop...');
+      // Step 3: Swap back USDe → MNT (compound)
+      console.log('2️⃣ Swapping USDe → MNT (compound)...');
+      const usdeAmount = ethers.parseEther(usdeBalance);
+      
+      if (usdeAmount > 0n) {
+        // Approve and swap back
+        const swapBackResult = await this.swapExecutor.swapOnAgni(
+          ADDRESSES.USDe,
+          ADDRESSES.WMNT,
+          usdeAmount,
+          0.5,
+          3000
+        );
 
-    while (this.isRunning) {
-      try {
-        // Execute strategy
-        await this.strategyEngine.execute();
-
-        // Wait before next iteration
-        const interval = parseInt(process.env.STRATEGY_INTERVAL || '60000'); // 1 minute default
-        await new Promise((resolve) => setTimeout(resolve, interval));
-      } catch (error) {
-        logger.error('Error in main loop:', error);
-        // Wait before retrying
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        if (swapBackResult.success) {
+          console.log(`✅ Compound successful! TX: ${swapBackResult.txHash}`);
+          
+          // Unwrap WMNT → MNT
+          const wmntBal = await this.swapExecutor.getBalance(ADDRESSES.WMNT);
+          if (parseFloat(wmntBal) > 0) {
+            await this.swapExecutor.unwrapWMNT(ethers.parseEther(wmntBal));
+          }
+        } else {
+          console.error(`❌ Compound failed: ${swapBackResult.error}`);
+        }
       }
+
+      // Update amount for next iteration
+      const newBalance = await this.provider.getBalance(this.swapExecutor.getAddress());
+      const profit = newBalance - currentAmount;
+      console.log(`📊 Profit: ${ethers.formatEther(profit)} MNT`);
+      
+      currentAmount = newBalance;
     }
+
+    // Final summary
+    const finalBalance = await this.provider.getBalance(this.swapExecutor.getAddress());
+    const totalProfit = finalBalance - this.startingBalance;
+    
+    console.log('\n' + '═'.repeat(50));
+    console.log('📊 STRATEGY SUMMARY');
+    console.log('═'.repeat(50));
+    console.log(`Starting: ${ethers.formatEther(this.startingBalance)} MNT`);
+    console.log(`Final:    ${ethers.formatEther(finalBalance)} MNT`);
+    console.log(`Profit:   ${ethers.formatEther(totalProfit)} MNT`);
+    console.log(`ROI:      ${((Number(totalProfit) / Number(this.startingBalance)) * 100).toFixed(2)}%`);
+    console.log('═'.repeat(50));
   }
 
-  async stop() {
-    logger.info('Stopping Mantle Agent Wallet...');
-    this.isRunning = false;
+  // ─────────────────────────────────────────────────────────────
+  //                    STATUS
+  // ─────────────────────────────────────────────────────────────
 
-    // Stop strategy engine
-    await this.strategyEngine.stop();
+  async getStatus(): Promise<object> {
+    const balance = await this.provider.getBalance(this.swapExecutor.getAddress());
+    const wmntBalance = await this.swapExecutor.getBalance(ADDRESSES.WMNT);
+    const usdeBalance = await this.swapExecutor.getBalance(ADDRESSES.USDe);
+    const usdtBalance = await this.swapExecutor.getBalance(ADDRESSES.USDT);
 
-    // Stop MCP server
-    await this.mcpServer.stop();
-
-    logger.info('Mantle Agent Wallet stopped');
+    return {
+      address: this.swapExecutor.getAddress(),
+      mntBalance: ethers.formatEther(balance),
+      wmntBalance,
+      usdeBalance,
+      usdtBalance,
+      pnl: ethers.formatEther(balance - this.startingBalance),
+    };
   }
 }
 
 // ═══════════════════════════════════════════════════════════════
-//                        ENTRY POINT
+//                    CLI INTERFACE
 // ═══════════════════════════════════════════════════════════════
 
 async function main() {
-  const agent = new MantleAgentWallet();
+  const args = process.argv.slice(2);
+  const command = args[0];
 
-  // Handle graceful shutdown
-  process.on('SIGINT', async () => {
-    logger.info('Received SIGINT, shutting down...');
-    await agent.stop();
-    process.exit(0);
-  });
-
-  process.on('SIGTERM', async () => {
-    logger.info('Received SIGTERM, shutting down...');
-    await agent.stop();
-    process.exit(0);
-  });
-
-  // Start agent
-  await agent.start();
-}
-
-// Run if executed directly
-if (require.main === module) {
-  main().catch((error) => {
-    logger.error('Fatal error:', error);
+  // Load private key from environment or file
+  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
+  if (!privateKey) {
+    console.error('❌ DEPLOYER_PRIVATE_KEY not set');
     process.exit(1);
-  });
+  }
+
+  const agent = new MantleAgent(privateKey);
+
+  switch (command) {
+    case 'init':
+      await agent.initialize();
+      break;
+
+    case 'swap':
+      if (args.length < 4) {
+        console.log('Usage: agent.ts swap <tokenIn> <tokenOut> <amountMNT>');
+        process.exit(1);
+      }
+      await agent.initialize();
+      const result = await agent.executeSwapStrategy(
+        args[1],
+        args[2],
+        parseFloat(args[3])
+      );
+      console.log('\nResult:', result);
+      break;
+
+    case 'compound':
+      await agent.initialize();
+      const amount = parseFloat(args[1] || '0.1');
+      const iterations = parseInt(args[2] || '3');
+      await agent.executeCompoundStrategy(amount, iterations);
+      break;
+
+    case 'status':
+      const status = await agent.getStatus();
+      console.log('\n📊 Agent Status:');
+      console.log(JSON.stringify(status, null, 2));
+      break;
+
+    default:
+      console.log(`
+🤖 Mantle Agent CLI
+
+Commands:
+  init                    Initialize agent and show balances
+  swap <in> <out> <amt>   Swap tokens
+  compound <amt> [iter]   Run compound strategy
+  status                  Show agent status
+
+Examples:
+  ts-node agent.ts init
+  ts-node agent.ts compound 0.1 5
+  ts-node agent.ts status
+      `);
+  }
 }
 
-export { MantleAgentWallet };
+main().catch(console.error);

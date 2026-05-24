@@ -1,31 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import "./interfaces/IAgenticWallet.sol";
-import "./interfaces/IERC8004.sol";
-
-/// @title AgenticWallet - Autonomous Agent Wallet
-/// @notice Smart contract wallet for AI agents on Mantle Network
-/// @dev Implements ERC-8004 identity and autonomous execution
-contract AgenticWallet is IAgenticWallet {
+/// @title AgenticWallet - Autonomous Agent Wallet for Mantle
+/// @notice Smart contract wallet for AI agents with ERC-8004 identity
+/// @dev Implements autonomous execution, strategy management, and compound logic
+contract AgenticWallet {
     // ═══════════════════════════════════════════════════════════════
     //                          STATE
     // ═══════════════════════════════════════════════════════════════
 
     /// @notice The agent's owner
-    address public override owner;
+    address public owner;
 
     /// @notice The agent's ERC-8004 token ID
-    uint256 public override agentId;
+    uint256 public agentId;
 
     /// @notice The active strategy identifier
-    bytes32 public override activeStrategy;
+    bytes32 public activeStrategy;
 
     /// @notice The ERC-8004 identity registry
-    IERC8004 public immutable identityRegistry;
-
-    /// @notice The ERC-8004 reputation registry
-    IERC8004Reputation public immutable reputationRegistry;
+    address public identityRegistry;
 
     /// @notice Whether a strategy is registered
     mapping(bytes32 => bool) public registeredStrategies;
@@ -35,6 +29,22 @@ contract AgenticWallet is IAgenticWallet {
 
     /// @notice Nonce for replay protection
     uint256 public nonce;
+
+    /// @notice Total profit generated
+    int256 public totalProfit;
+
+    /// @notice Starting balance for P&L tracking
+    uint256 public startingBalance;
+
+    // ═══════════════════════════════════════════════════════════════
+    //                          EVENTS
+    // ═══════════════════════════════════════════════════════════════
+
+    event ActionExecuted(address indexed target, bytes data, uint256 value, bool success, bytes result);
+    event StrategyChanged(bytes32 oldStrategy, bytes32 newStrategy);
+    event Deposited(address indexed from, uint256 amount);
+    event Withdrawn(address indexed to, uint256 amount);
+    event ProfitRecorded(int256 profit, uint256 newBalance);
 
     // ═══════════════════════════════════════════════════════════════
     //                          ERRORS
@@ -58,7 +68,6 @@ contract AgenticWallet is IAgenticWallet {
     }
 
     modifier onlyAuthorized() {
-        // Allow owner or strategy executor to call
         if (msg.sender != owner) {
             if (activeStrategy == bytes32(0)) revert NotAuthorized();
             address executor = strategyExecutors[activeStrategy];
@@ -75,23 +84,13 @@ contract AgenticWallet is IAgenticWallet {
 
     /// @notice Create a new AgenticWallet
     /// @param _owner The wallet owner address
-    /// @param _agentId The ERC-8004 agent token ID
     /// @param _identityRegistry The ERC-8004 identity registry address
-    /// @param _reputationRegistry The ERC-8004 reputation registry address
-    constructor(
-        address _owner,
-        uint256 _agentId,
-        address _identityRegistry,
-        address _reputationRegistry
-    ) {
+    constructor(address _owner, address _identityRegistry) {
         if (_owner == address(0)) revert InvalidAddress();
         if (_identityRegistry == address(0)) revert InvalidAddress();
-        if (_reputationRegistry == address(0)) revert InvalidAddress();
 
         owner = _owner;
-        agentId = _agentId;
-        identityRegistry = IERC8004(_identityRegistry);
-        reputationRegistry = IERC8004Reputation(_reputationRegistry);
+        identityRegistry = _identityRegistry;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -106,35 +105,28 @@ contract AgenticWallet is IAgenticWallet {
     //                     EXECUTION
     // ═══════════════════════════════════════════════════════════════
 
-    /// @inheritdoc IAgenticWallet
+    /// @notice Execute a single action
     function execute(
         address target,
         bytes calldata data,
         uint256 value
-    ) external override onlyAuthorized returns (bool success, bytes memory result) {
+    ) external onlyAuthorized returns (bool success, bytes memory result) {
         if (target == address(0)) revert InvalidAddress();
         if (value > address(this).balance) {
             revert InsufficientBalance(value, address(this).balance);
         }
 
         (success, result) = target.call{value: value}(data);
-
         emit ActionExecuted(target, data, value, success, result);
-
-        if (!success) {
-            // Emit the error but don't revert - let caller decide
-            // This allows batch execution to continue
-        }
-
         nonce++;
     }
 
-    /// @inheritdoc IAgenticWallet
+    /// @notice Execute multiple actions in a single transaction
     function batchExecute(
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external override onlyAuthorized returns (bool[] memory successes, bytes[] memory results) {
+    ) external onlyAuthorized returns (bool[] memory successes, bytes[] memory results) {
         uint256 length = targets.length;
         if (length != datas.length || length != values.length) {
             revert InvalidAmount();
@@ -150,7 +142,6 @@ contract AgenticWallet is IAgenticWallet {
             }
 
             (successes[i], results[i]) = targets[i].call{value: values[i]}(datas[i]);
-
             emit ActionExecuted(targets[i], datas[i], values[i], successes[i], results[i]);
         }
 
@@ -162,8 +153,6 @@ contract AgenticWallet is IAgenticWallet {
     // ═══════════════════════════════════════════════════════════════
 
     /// @notice Register a new strategy
-    /// @param strategyId The strategy identifier
-    /// @param executor The strategy executor contract address
     function registerStrategy(bytes32 strategyId, address executor) external onlyOwner {
         if (executor == address(0)) revert InvalidAddress();
         registeredStrategies[strategyId] = true;
@@ -171,35 +160,48 @@ contract AgenticWallet is IAgenticWallet {
     }
 
     /// @notice Remove a strategy
-    /// @param strategyId The strategy identifier
     function removeStrategy(bytes32 strategyId) external onlyOwner {
         registeredStrategies[strategyId] = false;
         strategyExecutors[strategyId] = address(0);
     }
 
-    /// @inheritdoc IAgenticWallet
-    function setStrategy(bytes32 strategyId) external override onlyOwner {
+    /// @notice Set the active strategy
+    function setStrategy(bytes32 strategyId) external onlyOwner {
         if (strategyId != bytes32(0) && !registeredStrategies[strategyId]) {
             revert StrategyNotRegistered(strategyId);
         }
 
         bytes32 oldStrategy = activeStrategy;
         activeStrategy = strategyId;
-
         emit StrategyChanged(oldStrategy, strategyId);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //                     BALANCE & WITHDRAWAL
+    //                     BALANCE & P&L
     // ═══════════════════════════════════════════════════════════════
 
-    /// @inheritdoc IAgenticWallet
-    function getBalance() external view override returns (uint256) {
+    /// @notice Get the wallet balance
+    function getBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
-    /// @inheritdoc IAgenticWallet
-    function withdraw(address to, uint256 amount) external override onlyOwner {
+    /// @notice Get current P&L
+    function getPnL() external view returns (int256) {
+        return int256(address(this).balance) - int256(startingBalance);
+    }
+
+    /// @notice Record profit after a successful trade
+    function recordProfit(int256 profit) external onlyAuthorized {
+        totalProfit += profit;
+        emit ProfitRecorded(profit, address(this).balance);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //                     WITHDRAWAL
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @notice Withdraw funds from the wallet
+    function withdraw(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
         if (amount > address(this).balance) {
@@ -217,9 +219,13 @@ contract AgenticWallet is IAgenticWallet {
     // ═══════════════════════════════════════════════════════════════
 
     /// @notice Transfer ownership of the wallet
-    /// @param newOwner The new owner address
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert InvalidAddress();
         owner = newOwner;
+    }
+
+    /// @notice Set the ERC-8004 agent ID
+    function setAgentId(uint256 _agentId) external onlyOwner {
+        agentId = _agentId;
     }
 }
