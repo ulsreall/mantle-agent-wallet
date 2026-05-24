@@ -27,8 +27,16 @@
       ]
     }
   ],
-  "registrations": [],
-  "supportedTrusts": [
+  "registrations": [
+    {
+      "chain": "mantle",
+      "chainId": 5000,
+      "contractAddress": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+      "tokenId": "98",
+      "agentWallet": "0xb22c73495353fe732CAFD4dbFFD6500939BB9507"
+    }
+  ],
+  "supportedTrust": [
     "reputation"
   ],
   "active": true,
