@@ -11,6 +11,17 @@ interface AgentStatus {
   agentId: string;
   pnl: string;
   usdtBalance: string;
+  mntPrice: number;
+}
+
+interface Strategy {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  risk: 'low' | 'medium' | 'high';
+  status: 'idle' | 'running' | 'paused';
+  config: Record<string, any>;
 }
 
 interface SwapEvent {
@@ -27,20 +38,60 @@ interface SwapEvent {
 function Dashboard() {
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'strategy'>('overview');
   const [animateBalance, setAnimateBalance] = useState(false);
+  const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
+  const [strategies, setStrategies] = useState<Strategy[]>([
+    {
+      id: 'dca',
+      name: 'DCA (Dollar Cost Average)',
+      icon: '📊',
+      description: 'Auto-buy fixed MNT amount at regular intervals. Best for steady accumulation.',
+      risk: 'low',
+      status: 'idle',
+      config: { amountPerBuy: '0.1', interval: '1h', maxBuys: 20 },
+    },
+    {
+      id: 'grid',
+      name: 'Grid Trading',
+      icon: '📐',
+      description: 'Buy/sell at predefined price levels. Profits from market volatility.',
+      risk: 'medium',
+      status: 'idle',
+      config: { lowerPrice: '0.60', upperPrice: '0.75', gridLevels: 5 },
+    },
+    {
+      id: 'arbitrage',
+      name: 'Arbitrage Scanner',
+      icon: '🔍',
+      description: 'Scan Agni vs Merchant Moe for price differences. Execute when spread > 0.3%.',
+      risk: 'low',
+      status: 'idle',
+      config: { minSpread: '0.3%', maxAmount: '0.5 MNT' },
+    },
+    {
+      id: 'stoploss',
+      name: 'Stop Loss / Take Profit',
+      icon: '🛡️',
+      description: 'Protect position: auto-sell if price drops below threshold or rises above target.',
+      risk: 'low',
+      status: 'idle',
+      config: { stopLoss: '-10%', takeProfit: '+15%', trailing: '5%' },
+    },
+  ]);
 
   const mockActivity: SwapEvent[] = [
-    { id: 1, type: 'Swap', from: 'WMNT', to: 'USDT', amount: '0.05', txHash: '0x7fe9...62e', time: '2 min ago', status: 'success' },
-    { id: 2, type: 'Register', from: 'ERC-8004', to: 'Identity', amount: '#98', txHash: '0xe60a...f96', time: '15 min ago', status: 'success' },
-    { id: 3, type: 'Deploy', from: 'Contract', to: 'AgenticWallet', amount: '0.15 MNT', txHash: '0xb22c...507', time: '20 min ago', status: 'success' },
-    { id: 4, type: 'Wrap', from: 'MNT', to: 'WMNT', amount: '0.05', txHash: '0xf84e...a48', time: '25 min ago', status: 'success' },
+    { id: 1, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.3', txHash: '0x89c6...38d2', time: '2 min ago', status: 'success' },
+    { id: 2, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.197', txHash: '0xb970...25a5', time: '3 min ago', status: 'success' },
+    { id: 3, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.1', txHash: '0x4ad9...9442', time: '5 min ago', status: 'success' },
+    { id: 4, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.065', txHash: '0x763f...eb8b', time: '6 min ago', status: 'success' },
+    { id: 5, type: 'Register', from: 'ERC-8004', to: 'Identity', amount: '#98', txHash: '0xe60a...f96', time: '1 hour ago', status: 'success' },
+    { id: 6, type: 'Deploy', from: 'Contract', to: 'AgenticWallet', amount: '0.15 MNT', txHash: '0xb22c...507', time: '2 hours ago', status: 'success' },
   ];
 
   const fetchStatus = async () => {
     try {
-      const [walletRes, contractRes] = await Promise.all([
+      const [walletRes, contractRes, priceRes] = await Promise.all([
         fetch(RPC_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -51,15 +102,18 @@ function Dashboard() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_getBalance', params: [CONTRACT_ADDRESS, 'latest'], id: 2 }),
         }),
+        fetch('https://api.coingecko.com/api/v3/simple/price?ids=mantle&vs_currencies=usd').then(r => r.json()).catch(() => ({ mantle: { usd: 0.655 } })),
       ]);
 
       const walletData = await walletRes.json();
       const contractData = await contractRes.json();
+      const priceData = priceRes as any;
 
       const mntBalance = (parseInt(walletData.result, 16) / 1e18).toFixed(4);
       const contractBalance = (parseInt(contractData.result, 16) / 1e18).toFixed(4);
+      const mntPrice = priceData.mantle?.usd || 0.655;
 
-      setStatus({ mntBalance, contractBalance, agentId: '98', pnl: '+0.0260', usdtBalance: '0.0664' });
+      setStatus({ mntBalance, contractBalance, agentId: '98', pnl: '+0.0260', usdtBalance: '0.0664', mntPrice });
       setAnimateBalance(true);
       setTimeout(() => setAnimateBalance(false), 1000);
     } catch (err) {
@@ -74,6 +128,23 @@ function Dashboard() {
     const interval = setInterval(fetchStatus, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  const toggleStrategy = (id: string) => {
+    setStrategies(prev => prev.map(s => 
+      s.id === id 
+        ? { ...s, status: s.status === 'running' ? 'idle' : 'running' }
+        : s
+    ));
+  };
+
+  const getRiskColor = (risk: string) => {
+    switch (risk) {
+      case 'low': return '#34d399';
+      case 'medium': return '#fbbf24';
+      case 'high': return '#fb7185';
+      default: return '#94a3b8';
+    }
+  };
 
   return (
     <div className="dashboard">
@@ -121,20 +192,19 @@ function Dashboard() {
             <span className="stat-unit">MNT</span>
           </div>
           <div className="stat-change positive">
-            <span className="arrow">↑</span> +0.72% ROI
+            <span className="arrow">↑</span> ${loading ? '...' : ((parseFloat(status?.mntBalance || '0') * (status?.mntPrice || 0)).toFixed(2))} USD
           </div>
         </div>
 
         <div className="stat-card">
           <div className="stat-header">
             <span className="stat-icon">📈</span>
-            <span className="stat-label">P&L</span>
+            <span className="stat-label">MNT Price</span>
           </div>
-          <div className="stat-value profit">
-            {loading ? '...' : status?.pnl}
-            <span className="stat-unit">MNT</span>
+          <div className="stat-value">
+            ${loading ? '...' : status?.mntPrice.toFixed(4)}
           </div>
-          <div className="stat-sub">From compound strategy</div>
+          <div className="stat-sub">Live from CoinGecko</div>
         </div>
 
         <div className="stat-card">
@@ -146,7 +216,7 @@ function Dashboard() {
             {loading ? '...' : status?.usdtBalance}
             <span className="stat-unit">USDT</span>
           </div>
-          <div className="stat-sub">From swap</div>
+          <div className="stat-sub">From swaps</div>
         </div>
 
         <div className="stat-card">
@@ -182,7 +252,7 @@ function Dashboard() {
           onClick={() => setActiveTab('strategy')}
         >
           <span className="tab-icon">⚡</span>
-          Strategy
+          Strategies
         </button>
       </div>
 
@@ -209,31 +279,9 @@ function Dashboard() {
                   <span className="info-label">Network</span>
                   <span className="info-value">Mantle Mainnet (5000)</span>
                 </div>
-              </div>
-            </div>
-
-            {/* Strategy Info */}
-            <div className="card">
-              <div className="card-header">
-                <h3>⚡ Active Strategy</h3>
-                <span className="badge running">Running</span>
-              </div>
-              <div className="info-list">
                 <div className="info-item">
-                  <span className="info-label">Type</span>
-                  <span className="info-value">Compound Yield</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">DEX</span>
-                  <span className="info-value">Agni Finance (V3)</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Pair</span>
-                  <span className="info-value">WMNT/USDT</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Fee Tier</span>
-                  <span className="info-value">0.05%</span>
+                  <span className="info-label">Transactions</span>
+                  <span className="info-value">14 on-chain</span>
                 </div>
               </div>
             </div>
@@ -241,29 +289,42 @@ function Dashboard() {
             {/* Quick Actions */}
             <div className="card actions-card">
               <div className="card-header">
-                <h3>🎮 Controls</h3>
+                <h3>🎮 Quick Actions</h3>
               </div>
               <div className="actions">
-                <button
-                  className={`btn primary ${running ? 'running' : ''}`}
-                  onClick={() => setRunning(!running)}
-                >
-                  {running ? (
-                    <>
-                      <span className="btn-icon">⏸</span>
-                      Stop Strategy
-                    </>
-                  ) : (
-                    <>
-                      <span className="btn-icon">▶</span>
-                      Start Compound
-                    </>
-                  )}
+                <button className="btn primary" onClick={() => setActiveTab('strategy')}>
+                  <span className="btn-icon">⚡</span>
+                  View Strategies
                 </button>
                 <button className="btn secondary" onClick={fetchStatus}>
                   <span className="btn-icon">🔄</span>
                   Refresh
                 </button>
+              </div>
+            </div>
+
+            {/* Links */}
+            <div className="card">
+              <div className="card-header">
+                <h3>🔗 Links</h3>
+              </div>
+              <div className="info-list">
+                <div className="info-item">
+                  <span className="info-label">Dashboard</span>
+                  <a href="https://mantle-agent.vercel.app" target="_blank" rel="noopener" className="info-value link">mantle-agent.vercel.app</a>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">GitHub</span>
+                  <a href="https://github.com/ulsreall/mantle-agent-wallet" target="_blank" rel="noopener" className="info-value link">ulsreall/mantle-agent-wallet</a>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">8004scan</span>
+                  <a href="https://8004scan.io/agents/mantle/98" target="_blank" rel="noopener" className="info-value link">agents/mantle/98</a>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Demo</span>
+                  <a href="https://youtu.be/I_wQ65R0bok" target="_blank" rel="noopener" className="info-value link">YouTube</a>
+                </div>
               </div>
             </div>
           </div>
@@ -306,56 +367,53 @@ function Dashboard() {
         )}
 
         {activeTab === 'strategy' && (
-          <div className="strategy-container">
-            <div className="strategy-card">
-              <div className="strategy-header">
-                <div className="strategy-icon">🔄</div>
-                <div>
-                  <h3>Compound Yield Strategy</h3>
-                  <p>Automated round-trip swaps to maximize returns</p>
+          <div className="strategies-grid">
+            {strategies.map((strategy) => (
+              <div 
+                key={strategy.id} 
+                className={`strategy-card ${selectedStrategy === strategy.id ? 'selected' : ''} ${strategy.status}`}
+                onClick={() => setSelectedStrategy(strategy.id === selectedStrategy ? null : strategy.id)}
+              >
+                <div className="strategy-header">
+                  <div className="strategy-icon-large">{strategy.icon}</div>
+                  <div className="strategy-info">
+                    <h3>{strategy.name}</h3>
+                    <p>{strategy.description}</p>
+                  </div>
+                  <div className="strategy-status">
+                    <span className={`status-dot ${strategy.status}`}></span>
+                    <span className="status-label">{strategy.status}</span>
+                  </div>
+                </div>
+                
+                <div className="strategy-meta">
+                  <span className="risk-badge" style={{ color: getRiskColor(strategy.risk), borderColor: getRiskColor(strategy.risk) }}>
+                    {strategy.risk.toUpperCase()} RISK
+                  </span>
+                </div>
+
+                <div className="strategy-config">
+                  {Object.entries(strategy.config).map(([key, value]) => (
+                    <div key={key} className="config-item">
+                      <span className="config-key">{key}</span>
+                      <span className="config-value">{value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="strategy-actions">
+                  <button 
+                    className={`btn ${strategy.status === 'running' ? 'danger' : 'primary'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStrategy(strategy.id);
+                    }}
+                  >
+                    {strategy.status === 'running' ? '⏹ Stop' : '▶ Start'}
+                  </button>
                 </div>
               </div>
-              <div className="strategy-flow">
-                <div className="flow-step">
-                  <div className="flow-icon">🏦</div>
-                  <span>MNT</span>
-                </div>
-                <div className="flow-arrow">→</div>
-                <div className="flow-step">
-                  <div className="flow-icon">📦</div>
-                  <span>WMNT</span>
-                </div>
-                <div className="flow-arrow">→</div>
-                <div className="flow-step active">
-                  <div className="flow-icon">🔀</div>
-                  <span>USDT</span>
-                </div>
-                <div className="flow-arrow">→</div>
-                <div className="flow-step">
-                  <div className="flow-icon">📦</div>
-                  <span>WMNT</span>
-                </div>
-                <div className="flow-arrow">→</div>
-                <div className="flow-step">
-                  <div className="flow-icon">🏦</div>
-                  <span>MNT</span>
-                </div>
-              </div>
-              <div className="strategy-stats">
-                <div className="strategy-stat">
-                  <span className="label">Iterations</span>
-                  <span className="value">1</span>
-                </div>
-                <div className="strategy-stat">
-                  <span className="label">Success Rate</span>
-                  <span className="value">100%</span>
-                </div>
-                <div className="strategy-stat">
-                  <span className="label">Avg ROI</span>
-                  <span className="value profit">+0.72%</span>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         )}
       </div>
