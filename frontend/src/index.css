@@ -49,16 +49,11 @@ body {
   gap: 16px;
 }
 
-.logo {
-  font-size: 32px;
+.logo-img {
   width: 48px;
   height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-card);
   border-radius: 12px;
-  border: 1px solid var(--border);
+  object-fit: cover;
 }
 
 .header h1 {

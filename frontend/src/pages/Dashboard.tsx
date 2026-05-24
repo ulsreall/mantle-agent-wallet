@@ -56,7 +56,7 @@ function Dashboard() {
     <div className="dashboard">
       <header className="header">
         <div className="header-left">
-          <div className="logo">🤖</div>
+          <img src="/logo.png" alt="MantleAgent" className="logo-img" />
           <div>
             <h1>MantleAgent</h1>
             <span className="subtitle">Autonomous DeFi Agent · ERC-8004</span>
