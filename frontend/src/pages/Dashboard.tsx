@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import PriceChart from '../components/PriceChart';
+import ConnectWallet from '../components/ConnectWallet';
+import TxHistory from '../components/TxHistory';
 import '../index.css';
 
 const WALLET_ADDRESS = '0x34177FAb96D410BD2CFA468c1b1ef27bEF46793B';
@@ -23,18 +26,6 @@ interface Strategy {
   config: Record<string, string>;
   tested: boolean;
   txHash?: string;
-}
-
-interface SwapEvent {
-  id: number;
-  type: string;
-  from: string;
-  to: string;
-  amount: string;
-  txHash: string;
-  time: string;
-  status: 'success' | 'pending' | 'failed';
-  strategy?: string;
 }
 
 function Dashboard() {
@@ -88,18 +79,6 @@ function Dashboard() {
       txHash: '0xcd8cbd984c29a8bfc04ae065df4c5fe579716b4e94e87af089379b75002e5596',
     },
   ]);
-
-  const activity: SwapEvent[] = [
-    { id: 1, type: 'DCA Buy', from: 'MNT', to: 'USDT', amount: '0.05', txHash: '0xf194...a71f', time: '2 min ago', status: 'success', strategy: 'DCA' },
-    { id: 2, type: 'Grid Buy', from: 'MNT', to: 'USDT', amount: '0.03', txHash: '0x3b08...016', time: '3 min ago', status: 'success', strategy: 'Grid' },
-    { id: 3, type: 'Stop Loss', from: 'USDT', to: 'MNT', amount: '0.052', txHash: '0xcd8c...5596', time: '4 min ago', status: 'success', strategy: 'StopLoss' },
-    { id: 4, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.05', txHash: '0x0f0b...753e', time: '10 min ago', status: 'success' },
-    { id: 5, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.032', txHash: '0x54ef...73b8', time: '11 min ago', status: 'success' },
-    { id: 6, type: 'Swap', from: 'MNT', to: 'USDT', amount: '0.3', txHash: '0x89c6...38d2', time: '30 min ago', status: 'success' },
-    { id: 7, type: 'Swap', from: 'USDT', to: 'MNT', amount: '0.197', txHash: '0xb970...25a5', time: '31 min ago', status: 'success' },
-    { id: 8, type: 'Register', from: 'ERC-8004', to: 'Identity', amount: '#98', txHash: '0xe60a...f96', time: '2 hours ago', status: 'success' },
-    { id: 9, type: 'Deploy', from: 'Contract', to: 'AgenticWallet', amount: '0.15 MNT', txHash: '0xb22c...507', time: '3 hours ago', status: 'success' },
-  ];
 
   const fetchStatus = async () => {
     try {
@@ -176,6 +155,7 @@ function Dashboard() {
           </div>
         </div>
         <div className="header-right">
+          <ConnectWallet />
           <div className="status-indicator">
             <span className="pulse-dot"></span>
             <span className="status-text">Live</span>
@@ -251,6 +231,9 @@ function Dashboard() {
       <div className="content">
         {activeTab === 'overview' && (
           <div className="overview-grid">
+            <div style={{ gridColumn: 'span 2' }}>
+              <PriceChart />
+            </div>
             <div className="card">
               <div className="card-header">
                 <h3>🔗 Wallet</h3>
@@ -317,39 +300,7 @@ function Dashboard() {
         )}
 
         {activeTab === 'activity' && (
-          <div className="activity-container">
-            <div className="activity-header">
-              <h3>Recent Transactions</h3>
-              <span className="badge">{activity.length} total</span>
-            </div>
-            <div className="activity-list">
-              {activity.map((event, index) => (
-                <div key={event.id} className="activity-item" style={{ animationDelay: `${index * 0.1}s` }}>
-                  <div className="activity-icon-wrapper">
-                    <span className="activity-icon">
-                      {event.strategy === 'DCA' ? '📊' : event.strategy === 'Grid' ? '📐' : event.strategy === 'StopLoss' ? '🛡️' : event.type === 'Swap' ? '🔀' : event.type === 'Register' ? '🪪' : '📦'}
-                    </span>
-                  </div>
-                  <div className="activity-content">
-                    <div className="activity-title">
-                      <span className="activity-type">{event.type}</span>
-                      <span className="activity-pair">{event.from} → {event.to}</span>
-                    </div>
-                    <div className="activity-meta">
-                      <span className="activity-amount">{event.amount}</span>
-                      <span className="activity-time">{event.time}</span>
-                    </div>
-                  </div>
-                  <div className="activity-status">
-                    <span className={`status-badge ${event.status}`}>
-                      {event.status === 'success' ? '✓' : event.status === 'pending' ? '⏳' : '✗'}
-                    </span>
-                    <span className="activity-hash">{event.txHash}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TxHistory />
         )}
 
         {activeTab === 'strategy' && (

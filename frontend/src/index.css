@@ -499,6 +499,11 @@ body {
   50% { box-shadow: 0 4px 25px rgba(239, 68, 68, 0.5); }
 }
 
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .btn.secondary {
   background: var(--bg-secondary);
   color: var(--text-primary);
