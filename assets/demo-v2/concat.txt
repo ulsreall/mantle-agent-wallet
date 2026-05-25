@@ -1,0 +1,8 @@
+file 'scene1_title.mp4'
+file 'scene2_stats.mp4'
+file 'scene3_wallet.mp4'
+file 'scene4_chart.mp4'
+file 'scene5_history.mp4'
+file 'scene6_strategies.mp4'
+file 'scene7_proof.mp4'
+file 'scene8_outro.mp4'
