@@ -123,7 +123,7 @@ function Dashboard() {
   const toggleStrategy = (id: string) => {
     setStrategies(prev => prev.map(s => 
       s.id === id 
-        ? { ...s, status: s.status === 'running' ? 'stopped' : 'running' }
+        ? { ...s, status: s.status === 'running' ? 'paused' : 'running' }
         : s
     ));
   };
@@ -360,7 +360,7 @@ function Dashboard() {
                     className={`btn ${strategy.status === 'running' ? 'danger' : 'primary'}`}
                     onClick={(e) => { e.stopPropagation(); toggleStrategy(strategy.id); }}
                   >
-                    {strategy.status === 'running' ? '⏹ Stop' : '▶ Start'}
+                    {strategy.status === 'running' ? '⏸ Pause' : '▶ Start'}
                   </button>
                 </div>
               </div>
