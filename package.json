@@ -19,5 +19,8 @@
     "node": ">=18.0.0"
   },
   "license": "MIT",
-  "author": "ulsreall"
+  "author": "ulsreall",
+  "dependencies": {
+    "ethers": "^6.16.0"
+  }
 }
