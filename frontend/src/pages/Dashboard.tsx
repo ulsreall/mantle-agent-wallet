@@ -34,7 +34,7 @@ function Dashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'strategy'>('overview');
   const [animateBalance, setAnimateBalance] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
-  const [strategies] = useState<Strategy[]>([
+  const [strategies, setStrategies] = useState<Strategy[]>([
     {
       id: 'dca',
       name: 'DCA (Dollar Cost Average)',
@@ -121,8 +121,11 @@ function Dashboard() {
   }, []);
 
   const toggleStrategy = (id: string) => {
-    // Strategy toggle handled by backend
-    console.log('Toggle strategy:', id);
+    setStrategies(prev => prev.map(s => 
+      s.id === id 
+        ? { ...s, status: s.status === 'running' ? 'stopped' : 'running' }
+        : s
+    ));
   };
 
   const getRiskColor = (risk: string) => {
